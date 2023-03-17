@@ -6,7 +6,7 @@ let debugSetState = false;
 /**
  * @param {Boolean} debug
  */
-function setShouldDebugSetState(debug) {
+function setShouldDebugSetState(debug: boolean) {
     debugSetState = debug;
 }
 
@@ -18,18 +18,20 @@ function setShouldDebugSetState(debug) {
  * @param  {Object} base
  * @return {Object}
  */
-function diffObject(object, base) {
-    function changes(obj, comparisonObject) {
-        return lodashTransform(obj, (result, value, key) => {
+function diffObject(object: Record<string, unknown>, base: Record<string, unknown>) {
+    function changes(obj: Record<string, unknown>, comparisonObject: Record<string, unknown>) {
+        return lodashTransform<Record<string, unknown>, Record<string, unknown>>(obj, (result, value, key) => {
             if (_.isEqual(value, comparisonObject[key])) {
                 return;
             }
 
+            const comparisonObjectKey = comparisonObject[key];
+
             // eslint-disable-next-line no-param-reassign
-            result[key] = (_.isObject(value) && _.isObject(comparisonObject[key]))
-                ? changes(value, comparisonObject[key])
+            result[key] = (_.isObject(value) && _.isObject(comparisonObjectKey))
+                ? changes(value, comparisonObjectKey)
                 : value;
-        });
+        }, {});
     }
     return changes(object, base);
 }
@@ -43,12 +45,12 @@ function diffObject(object, base) {
  * @param {String} caller
  * @param {String} [keyThatChanged]
  */
-function logSetStateCall(mapping, previousValue, newValue, caller, keyThatChanged) {
+function logSetStateCall(mapping: Record<string, unknown>, previousValue: unknown, newValue: unknown, caller: string, keyThatChanged: string) {
     if (!debugSetState) {
         return;
     }
 
-    const logParams = {};
+    const logParams: {keyThatChanged?: string, difference?: Record<string, unknown>, previousValue?: unknown, newValue?: unknown} = {};
     if (keyThatChanged) {
         logParams.keyThatChanged = keyThatChanged;
     }

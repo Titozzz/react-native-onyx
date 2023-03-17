@@ -6,7 +6,8 @@
 import React from 'react';
 import _ from 'underscore';
 import PropTypes from 'prop-types';
-import Str from 'expensify-common/lib/str';
+
+// import Str from 'expensify-common/lib/str';
 import Onyx from './Onyx';
 
 /**
@@ -15,20 +16,41 @@ import Onyx from './Onyx';
  * @param {object} component
  * @returns {string}
  */
-function getDisplayName(component) {
+function getDisplayName<T>(component: React.ComponentType<T>) {
     return component.displayName || component.name || 'Component';
 }
 
-export default function (mapOnyxToState) {
+type Mapping<T> = {
+    key: string | ((props: T) => string);
+    initWithStoredValues?: boolean;
+    canEvict?: boolean | ((props: T) => boolean);
+}
+
+export default function <Props extends {
+    forwardedRef: React.ForwardedRef<unknown>;
+}> (
+    mapOnyxToState: Record<
+        string,
+        Mapping<Props>
+    >,
+) {
     // A list of keys that must be present in tempState before we can render the WrappedComponent
     const requiredKeysForInit = _.chain(mapOnyxToState)
         .omit(config => config.initWithStoredValues === false)
         .keys()
         .value();
-    return (WrappedComponent) => {
+    return (WrappedComponent: React.ComponentType<Partial<Readonly<Props>>>) => {
         const displayName = getDisplayName(WrappedComponent);
-        class withOnyx extends React.Component {
-            constructor(props) {
+
+        class withOnyx extends React.Component<
+            Props,
+            { loading: boolean; [key: string]: unknown }
+        > {
+            activeConnectionIDs: Record<string, number>;
+
+            tempState?: Record<string, unknown>;
+
+            constructor(props: Props) {
                 super(props);
 
                 this.setWithOnyxState = this.setWithOnyxState.bind(this);
@@ -54,15 +76,22 @@ export default function (mapOnyxToState) {
                 this.checkEvictableKeys();
             }
 
-            componentDidUpdate(prevProps) {
+            componentDidUpdate(prevProps: Props) {
                 // If any of the mappings use data from the props, then when the props change, all the
                 // connections need to be reconnected with the new props
                 _.each(mapOnyxToState, (mapping, propertyName) => {
-                    const previousKey = Str.result(mapping.key, prevProps);
-                    const newKey = Str.result(mapping.key, this.props);
+                    const previousKey = typeof mapping.key === 'string'
+                        ? mapping.key
+                        : mapping.key(prevProps);
+                    const newKey = typeof mapping.key === 'string'
+                        ? mapping.key
+                        : mapping.key(this.props);
 
                     if (previousKey !== newKey) {
-                        Onyx.disconnect(this.activeConnectionIDs[previousKey], previousKey);
+                        Onyx.disconnect(
+                            this.activeConnectionIDs[previousKey],
+                            previousKey,
+                        );
                         delete this.activeConnectionIDs[previousKey];
                         this.connectMappingToOnyx(mapping, propertyName);
                     }
@@ -73,7 +102,9 @@ export default function (mapOnyxToState) {
             componentWillUnmount() {
                 // Disconnect everything from Onyx
                 _.each(mapOnyxToState, (mapping) => {
-                    const key = Str.result(mapping.key, this.props);
+                    const key = typeof mapping.key === 'string'
+                        ? mapping.key
+                        : mapping.key(this.props);
                     const connectionID = this.activeConnectionIDs[key];
                     Onyx.disconnect(connectionID, key);
                 });
@@ -87,16 +118,22 @@ export default function (mapOnyxToState) {
              * @param {String} statePropertyName
              * @param {*} val
              */
-            setWithOnyxState(statePropertyName, val) {
+            setWithOnyxState(statePropertyName: string, val: unknown) {
                 if (!this.state.loading) {
                     this.setState({[statePropertyName]: val});
                     return;
                 }
+                const tempState = this.tempState;
+                if (!tempState) {
+                    return;
+                }
 
-                this.tempState[statePropertyName] = val;
+                tempState[statePropertyName] = val;
 
                 // All state keys should exist and at least have a value of null
-                if (_.some(requiredKeysForInit, key => _.isUndefined(this.tempState[key]))) {
+                if (
+                    _.some(requiredKeysForInit, key => _.isUndefined(tempState[key]))
+                ) {
                     return;
                 }
 
@@ -118,17 +155,26 @@ export default function (mapOnyxToState) {
                         return;
                     }
 
-                    const canEvict = Str.result(mapping.canEvict, this.props);
-                    const key = Str.result(mapping.key, this.props);
+                    const canEvict = typeof mapping.canEvict === 'boolean'
+                        ? mapping.canEvict
+                        : mapping.canEvict(this.props);
+                    const key = typeof mapping.key === 'string'
+                        ? mapping.key
+                        : mapping.key(this.props);
 
                     if (!Onyx.isSafeEvictionKey(key)) {
-                        throw new Error(`canEvict can't be used on key '${key}'. This key must explicitly be flagged as safe for removal by adding it to Onyx.init({safeEvictionKeys: []}).`);
+                        throw new Error(
+                            `canEvict can't be used on key '${key}'. This key must explicitly be flagged as safe for removal by adding it to Onyx.init({safeEvictionKeys: []}).`,
+                        );
                     }
 
                     if (canEvict) {
-                        Onyx.removeFromEvictionBlockList(key, mapping.connectionID);
+                        Onyx.removeFromEvictionBlockList(
+                            key,
+                            this.activeConnectionIDs[key],
+                        );
                     } else {
-                        Onyx.addToEvictionBlockList(key, mapping.connectionID);
+                        Onyx.addToEvictionBlockList(key, this.activeConnectionIDs[key]);
                     }
                 });
             }
@@ -143,8 +189,8 @@ export default function (mapOnyxToState) {
              * @param {boolean} [mapping.initWithStoredValues] If set to false, then no data will be prefilled into the
              *  component
              */
-            connectMappingToOnyx(mapping, statePropertyName) {
-                const key = Str.result(mapping.key, this.props);
+            connectMappingToOnyx(mapping: Mapping<Props>, statePropertyName: string) {
+                const key = typeof mapping.key === 'string' ? mapping.key : mapping.key(this.props);
 
                 // eslint-disable-next-line rulesdir/prefer-onyx-connect-in-libs
                 this.activeConnectionIDs[key] = Onyx.connect({
@@ -152,6 +198,8 @@ export default function (mapOnyxToState) {
                     key,
                     statePropertyName,
                     withOnyxInstance: this,
+
+                    // @ts-expect-error onyx is still js
                     displayName,
                 });
             }
@@ -176,23 +224,28 @@ export default function (mapOnyxToState) {
                         {...propsToPass}
                         // eslint-disable-next-line react/jsx-props-no-spreading
                         {...stateToPass}
-                        ref={this.props.forwardedRef}
+                        ref={'forwardedRef' in this.props ? this.props.forwardedRef : undefined}
                     />
                 );
             }
         }
 
-        withOnyx.propTypes = {
-            forwardedRef: PropTypes.oneOfType([
-                PropTypes.func,
-                PropTypes.shape({current: PropTypes.instanceOf(React.Component)}),
-            ]),
-        };
-        withOnyx.defaultProps = {
-            forwardedRef: undefined,
-        };
+        // withOnyx.propTypes = {
+        //     forwardedRef: PropTypes.oneOfType([
+        //         PropTypes.func,
+        //         PropTypes.shape({
+        //             current: PropTypes.instanceOf(React.Component),
+        //         }),
+        //     ]),
+        // };
+        // withOnyx.defaultProps = {
+        //     forwardedRef: undefined,
+        // };
+
+        // @ts-expect-error - displayName is not inside the types
         withOnyx.displayName = `withOnyx(${displayName})`;
-        return React.forwardRef((props, ref) => {
+
+        return React.forwardRef((props: Props, ref) => {
             const Component = withOnyx;
             // eslint-disable-next-line react/jsx-props-no-spreading
             return <Component {...props} forwardedRef={ref} />;

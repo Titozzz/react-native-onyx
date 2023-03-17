@@ -1,6 +1,8 @@
 import AsciTable from 'ascii-table';
 
 class MDTable extends AsciTable {
+    leftAlignedCols: number[] = [];
+
     /**
      * Create a CSV string from the table data
      * @returns {string}
@@ -52,10 +54,15 @@ class MDTable extends AsciTable {
  * @param {Array} [options.rows] The table can be initialized with row. Rows can also be added by `addRow`
  * @returns {MDTable}
  */
-MDTable.factory = ({
+const createMDTable = ({
     title, heading, leftAlignedCols = [], rows = [],
+}: {
+    title?: string,
+    heading: string[],
+    leftAlignedCols: number[],
+    rows?: unknown[],
 }) => {
-    const table = new MDTable({title, heading, rows});
+    const table = new MDTable({title, heading, rows}, undefined);
     table.leftAlignedCols = leftAlignedCols;
 
     /* By default we want everything aligned to the right as most values are numbers
@@ -66,4 +73,4 @@ MDTable.factory = ({
     return table;
 };
 
-export default MDTable;
+export default createMDTable;

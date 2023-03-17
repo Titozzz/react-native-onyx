@@ -12,9 +12,9 @@ const SYNC_ONYX = 'SYNC_ONYX';
  * Raise an event thorough `localStorage` to let other tabs know a value changed
  * @param {String} onyxKey
  */
-function raiseStorageSyncEvent(onyxKey) {
+function raiseStorageSyncEvent(onyxKey: string) {
     global.localStorage.setItem(SYNC_ONYX, onyxKey);
-    global.localStorage.removeItem(SYNC_ONYX, onyxKey);
+    global.localStorage.removeItem(SYNC_ONYX);
 }
 
 const webStorage = {
@@ -23,7 +23,7 @@ const webStorage = {
     /**
      * @param {Function} onStorageKeyChanged Storage synchronization mechanism keeping all opened tabs in sync
      */
-    keepInstancesSync(onStorageKeyChanged) {
+    keepInstancesSync(onStorageKeyChanged: (key: string, value: unknown) => void) {
         // Override set, remove and clear to raise storage events that we intercept in other tabs
         this.setItem = (key, value) => Storage.setItem(key, value)
             .then(() => raiseStorageSyncEvent(key));
@@ -35,7 +35,7 @@ const webStorage = {
         // so that they can call keysChanged for them. That's why we iterate over every key and raise a storage sync
         // event for each one
         this.clear = () => {
-            let allKeys;
+            let allKeys: string[] = [];
 
             // They keys must be retreived before storage is cleared or else the list of keys would be empty
             return Storage.getAllKeys()

@@ -22,9 +22,9 @@ const provider = {
     * @param {String} key
     * @return {Promise<*>}
     */
-    getItem(key) {
+    getItem(key: string) {
         return db.executeAsync('SELECT record_key, valueJSON FROM keyvaluepairs WHERE record_key = ?;', [key]).then(({rows}) => {
-            if (rows.length === 0) {
+            if (!rows || rows.length === 0) {
                 return null;
             }
             const result = rows.item(0);
@@ -37,13 +37,13 @@ const provider = {
     * @param {String[]} keys
     * @return {Promise<Array<[key, value]>>}
     */
-    multiGet(keys) {
+    multiGet(keys: string[]) {
         const placeholders = _.map(keys, () => '?').join(',');
         const command = `SELECT record_key, valueJSON FROM keyvaluepairs WHERE record_key IN (${placeholders});`;
         return db.executeAsync(command, keys)
             .then(({rows}) => {
                 // eslint-disable-next-line no-underscore-dangle
-                const result = _.map(rows._array, row => [row.record_key, JSON.parse(row.valueJSON)]);
+                const result = _.map(rows?._array ?? [], row => [row.record_key, JSON.parse(row.valueJSON)]);
                 return result;
             });
     },
@@ -54,7 +54,7 @@ const provider = {
     * @param {*} value
     * @return {Promise<void>}
     */
-    setItem(key, value) {
+    setItem(key: string, value: unknown) {
         return db.executeAsync('REPLACE INTO keyvaluepairs (record_key, valueJSON) VALUES (?, ?);', [key, JSON.stringify(value)]);
     },
 
@@ -63,7 +63,7 @@ const provider = {
     * @param {Array<[key, value]>} pairs
     * @return {Promise<void>}
     */
-    multiSet(pairs) {
+    multiSet(pairs: [string, unknown][]) {
         const stringifiedPairs = _.map(pairs, pair => [
             pair[0],
             JSON.stringify(_.isUndefined(pair[1]) ? null : pair[1]),
@@ -79,13 +79,13 @@ const provider = {
     * @param {Array<[key, value]>} pairs
     * @return {Promise<void>}
     */
-    multiMerge(pairs) {
+    multiMerge(pairs: [string, unknown][]) {
         // Note: We use `ON CONFLICT DO UPDATE` here instead of `INSERT OR REPLACE INTO`
         // so the new JSON value is merged into the old one if there's an existing value
-        const query = `INSERT INTO keyvaluepairs (record_key, valueJSON) 
-             VALUES (:key, JSON(:value)) 
-             ON CONFLICT DO UPDATE 
-             SET valueJSON = JSON_PATCH(valueJSON, JSON(:value)); 
+        const query = `INSERT INTO keyvaluepairs (record_key, valueJSON)
+             VALUES (:key, JSON(:value))
+             ON CONFLICT DO UPDATE
+             SET valueJSON = JSON_PATCH(valueJSON, JSON(:value));
         `;
         const queryArguments = _.map(pairs, (pair) => {
             const value = JSON.stringify(pair[1]);
@@ -100,7 +100,7 @@ const provider = {
     */
     getAllKeys: () => db.executeAsync('SELECT record_key FROM keyvaluepairs;').then(({rows}) => {
         // eslint-disable-next-line no-underscore-dangle
-        const result = _.map(rows._array, row => row.record_key);
+        const result = _.map(rows?._array ?? [], row => row.record_key);
         return result;
     }),
 
@@ -109,7 +109,7 @@ const provider = {
     * @param {String} key
     * @returns {Promise<void>}
     */
-    removeItem: key => db.executeAsync('DELETE FROM keyvaluepairs WHERE record_key = ?;', [key]),
+    removeItem: (key: string) => db.executeAsync('DELETE FROM keyvaluepairs WHERE record_key = ?;', [key]),
 
     /**
     * Clears absolutely everything from storage

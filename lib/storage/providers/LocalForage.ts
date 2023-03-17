@@ -19,11 +19,11 @@ const provider = {
      * So, we are slowing this process down by waiting until one write is complete before moving on
      * to the next.
      */
-    setItemQueue: new SyncQueue(({key, value, shouldMerge}) => {
+    setItemQueue: new SyncQueue(({key, value, shouldMerge}: {key:string, value: unknown, shouldMerge?: boolean}) => {
         if (shouldMerge) {
             return localforage.getItem(key)
                 .then((existingValue) => {
-                    const newValue = _.isObject(existingValue)
+                    const newValue = _.isObject(existingValue) && _.isObject(value)
 
                         // lodash adds a small overhead so we don't use it here
                         // eslint-disable-next-line prefer-object-spread, rulesdir/prefer-underscore-method
@@ -41,7 +41,7 @@ const provider = {
      * @param {String[]} keys
      * @return {Promise<Array<[key, value]>>}
      */
-    multiGet(keys) {
+    multiGet(keys: string[]) {
         const pairs = _.map(
             keys,
             key => localforage.getItem(key)
@@ -56,7 +56,7 @@ const provider = {
      * @param {Array<[key, value]>} pairs
      * @return {Promise<void>}
      */
-    multiMerge(pairs) {
+    multiMerge(pairs: [string, unknown][]) {
         const tasks = _.map(pairs, ([key, value]) => this.setItemQueue.push({key, value, shouldMerge: true}));
 
         // We're returning Promise.resolve, otherwise the array of task results will be returned to the caller
@@ -68,7 +68,7 @@ const provider = {
      * @param {Array<[key, value]>} pairs
      * @return {Promise<void>}
      */
-    multiSet(pairs) {
+    multiSet(pairs: [string, unknown][]) {
         // We're returning Promise.resolve, otherwise the array of task results will be returned to the caller
         const tasks = _.map(pairs, ([key, value]) => this.setItem(key, value));
         return Promise.all(tasks).then(() => Promise.resolve());
@@ -109,7 +109,7 @@ const provider = {
      * @param {*} value
      * @return {Promise<void>}
      */
-    setItem(key, value) {
+    setItem(key: string, value: unknown) {
         return this.setItemQueue.push({key, value});
     },
 };

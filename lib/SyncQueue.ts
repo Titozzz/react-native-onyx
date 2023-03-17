@@ -11,11 +11,18 @@
  *     queue.push({key: 1, val: '1'});
  *     queue.push({key: 2, val: '2'});
  */
-export default class SyncQueue {
+export default class SyncQueue<T> {
     /**
      * @param {Function} run - must return a promise
      */
-    constructor(run) {
+
+    queue: {data: T, resolve: (value: unknown) => void, reject: () => void}[];
+
+    isProcessing: boolean;
+
+    run: (data: T) => Promise<unknown>;
+
+    constructor(run: (args: T) => Promise<unknown>) {
         this.queue = [];
         this.isProcessing = false;
         this.run = run;
@@ -30,13 +37,18 @@ export default class SyncQueue {
     }
 
     process() {
-        if (this.isProcessing || this.queue.length === 0) {
+        if (this.isProcessing) {
+            return;
+        }
+
+        const nextTask = this.queue.shift();
+        if (!nextTask) {
             return;
         }
 
         this.isProcessing = true;
 
-        const {data, resolve, reject} = this.queue.shift();
+        const {data, resolve, reject} = nextTask;
         this.run(data)
             .then(resolve)
             .catch(reject)
@@ -50,7 +62,7 @@ export default class SyncQueue {
      * @param {*} data
      * @returns {Promise}
      */
-    push(data) {
+    push(data: T) {
         return new Promise((resolve, reject) => {
             this.queue.push({resolve, reject, data});
             this.process();

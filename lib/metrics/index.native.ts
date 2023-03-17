@@ -1,6 +1,6 @@
 import _ from 'underscore';
-import performance from 'react-native-performance';
-import MDTable from '../MDTable';
+import performance, {PerformanceMark} from 'react-native-performance';
+import createMDTable from '../MDTable';
 
 const decoratedAliases = new Set();
 
@@ -10,7 +10,7 @@ const decoratedAliases = new Set();
  * @param {Array<*>} args
  * @returns {{name: string, startTime:number, detail: {args: [], alias: string}}}
  */
-function addMark(alias, args) {
+function addMark(alias: string, args: unknown[]): PerformanceMark {
     return performance.mark(alias, {detail: {args, alias}});
 }
 
@@ -19,7 +19,7 @@ function addMark(alias, args) {
  * @param {{name: string, startTime:number, detail: {args: []}}} startMark
  * @param {*} detail
  */
-function measureMarkToNow(startMark, detail) {
+function measureMarkToNow(startMark: PerformanceMark, detail: PerformanceMark['detail']) {
     performance.measure(`${startMark.name} [${startMark.detail.args.toString()}]`, {
         start: startMark.startTime,
         end: performance.now(),
@@ -33,14 +33,14 @@ function measureMarkToNow(startMark, detail) {
  * @param {String} [alias]
  * @returns {function} The wrapped function
  */
-function decorateWithMetrics(func, alias = func.name) {
+function decorateWithMetrics<T extends((...args: unknown[]) => Promise<unknown>)>(func: T, alias = func.name) {
     if (decoratedAliases.has(alias)) {
         throw new Error(`"${alias}" is already decorated`);
     }
 
     decoratedAliases.add(alias);
 
-    function decorated(...args) {
+    function decorated(this: unknown, ...args: unknown[]) {
         const mark = addMark(alias, args);
 
         const originalPromise = func.apply(this, args);
@@ -69,7 +69,7 @@ function decorateWithMetrics(func, alias = func.name) {
  * @param {string} prop
  * @returns {number}
  */
-function sum(list, prop) {
+function sum<T extends string>(list: Record<T, number>[], prop: T) {
     return _.reduce(list, (memo, next) => memo + next[prop], 0);
 }
 
@@ -88,12 +88,19 @@ function getMetrics() {
         .map((calls, methodName) => {
             const total = sum(calls, 'duration');
             const avg = (total / calls.length) || 0;
-            const max = _.max(calls, 'duration').duration || 0;
-            const min = _.min(calls, 'duration').duration || 0;
+            const underscoreMax = _.max(calls, 'duration');
+
+            // If the collection is empty, underscore will return -Infinity
+            const max = typeof underscoreMax === 'number' ? 0 : underscoreMax.duration;
+
+            const underscoreMin = _.min(calls, 'duration');
+
+            // If the collection is empty, underscore will return Infinity
+            const min = typeof underscoreMin === 'number' ? 0 : underscoreMin.duration;
 
             // Latest complete call (by end time) for all the calls made to the current method
-            const lastCall = _.max(calls, call => call.startTime + call.duration);
-
+            const underscoreLastCall = _.max(calls, call => call.startTime + call.duration);
+            const lastCall = typeof underscoreLastCall === 'number' ? null : underscoreLastCall;
             return [methodName, {
                 methodName,
                 total,
@@ -102,7 +109,7 @@ function getMetrics() {
                 avg,
                 lastCall,
                 calls,
-            }];
+            }] as const;
         })
         .object() // Create a map like methodName -> StatSummary
         .value();
@@ -110,10 +117,12 @@ function getMetrics() {
     const totalTime = sum(_.values(summaries), 'total');
 
     // Latest complete call (by end time) of all methods up to this point
-    const lastCompleteCall = _.max(
+    const underscoreLastCompleteCall = _.max(
         _.values(summaries),
-        summary => summary.lastCall.startTime + summary.lastCall.duration,
-    ).lastCall;
+        summary => (summary.lastCall?.startTime ?? 0) + (summary.lastCall?.duration ?? 0),
+    );
+
+    const lastCompleteCall = typeof underscoreLastCompleteCall === 'number' ? undefined : underscoreLastCompleteCall.lastCall;
 
     return {
         totalTime,
@@ -128,7 +137,7 @@ function getMetrics() {
  * @param {boolean} [raw=false]
  * @returns {string|number}
  */
-function toDuration(millis, raw = false) {
+function toDuration(millis: number, raw = false) {
     if (raw) {
         return millis;
     }
@@ -160,10 +169,10 @@ function toDuration(millis, raw = false) {
  * @param {string[]} [options.methods] Print stats only for these method names
  * @returns {string|undefined}
  */
-function printMetrics({raw = false, format = 'console', methods} = {}) {
+function printMetrics({raw = false, format = 'console', methods}: {raw: boolean, format: 'console' | 'csv' | 'json' | 'string', methods?: string[]}) {
     const {totalTime, summaries, lastCompleteCall} = getMetrics();
 
-    const tableSummary = MDTable.factory({
+    const tableSummary = createMDTable({
         heading: ['method', 'total time spent', 'max', 'min', 'avg', 'time last call completed', 'calls made'],
         leftAlignedCols: [0],
     });
@@ -185,11 +194,11 @@ function printMetrics({raw = false, format = 'console', methods} = {}) {
                 toDuration(methodStats.max, raw),
                 toDuration(methodStats.min, raw),
                 toDuration(methodStats.avg, raw),
-                toDuration((methodStats.lastCall.startTime + methodStats.lastCall.duration) - timeOrigin, raw),
+                methodStats.lastCall ? toDuration((methodStats.lastCall.startTime + methodStats.lastCall.duration) - timeOrigin, raw) : 'N/A',
                 calls.length,
             );
 
-            return MDTable.factory({
+            return createMDTable({
                 title: methodName,
                 heading: ['start time', 'end time', 'duration', 'args'],
                 leftAlignedCols: [3],

@@ -7,10 +7,18 @@
  * @returns {{ resolve: function(*), promise: Promise<T|void> }}
  */
 export default function createDeferredTask() {
-    const deferred = {};
-    deferred.promise = new Promise((res) => {
-        deferred.resolve = res;
+    let resRef: null | ((v: unknown) => void) = null;
+
+    const resolve = () => {
+        if (!resRef) {
+            return;
+        }
+        resRef(null);
+    };
+
+    const promise = new Promise((res) => {
+        resRef = res;
     });
 
-    return deferred;
+    return {promise, resolve} as const;
 }

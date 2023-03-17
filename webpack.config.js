@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
+
 const path = require('path');
 const {merge} = require('webpack-merge');
 const _ = require('underscore');
@@ -6,27 +8,28 @@ const pkg = require('./package.json');
 const commonConfig = {
     mode: 'production',
     devtool: 'source-map',
-    entry: './lib/index.js',
+    entry: './lib/index.ts',
     resolve: {
-        extensions: ['.jsx', '.js'],
+        extensions: ['.jsx', '.js', '.ts', '.tsx'],
     },
     module: {
         rules: [
             {
-                test: /\.js$/,
+                test: /\.(j|t)sx?$/,
                 exclude: /(node_modules)/,
                 use: {
-                    loader: 'babel-loader',
-                    options: {
-                        generatorOpts: {
-                            // We instruct babel to keep generated code as close to original source as possible
-                            // Production builds would strip comments and minify code regardless the config here
-                            // but development builds would retain jsdocs and method lines
-                            compact: false,
-                            retainLines: true,
-                            comments: true,
-                        },
-                    },
+                    loader: 'ts-loader',
+
+                    // options: {
+                    //     generatorOpts: {
+                    //         // We instruct babel to keep generated code as close to original source as possible
+                    //         // Production builds would strip comments and minify code regardless the config here
+                    //         // but development builds would retain jsdocs and method lines
+                    //         compact: false,
+                    //         retainLines: true,
+                    //         comments: true,
+                    //     },
+                    // },
                 },
             },
         ],
@@ -56,7 +59,7 @@ const webConfig = merge(commonConfig, {
     },
     resolve: {
         // Resolve any web specific JS file as a normal JS file
-        extensions: ['.web.js'],
+        extensions: ['.web.js', '.web.ts', '.web.tsx'],
     },
 });
 

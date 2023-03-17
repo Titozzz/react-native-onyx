@@ -9,6 +9,16 @@ const isDefined = _.negate(_.isUndefined);
  * Encapsulates Onyx cache related functionality
  */
 class OnyxCache {
+    storageKeys: Set<string>;
+
+    recentKeys: Set<string>;
+
+    storageMap: Record<string, unknown>;
+
+    pendingPromises: Record<string, Promise<unknown>>;
+
+    maxRecentKeysSize = 0;
+
     constructor() {
         /**
          * @private
@@ -60,7 +70,7 @@ class OnyxCache {
      * @param {string} key
      * @returns {*}
      */
-    getValue(key) {
+    getValue(key: string) {
         this.addToAccessedKeys(key);
         return this.storageMap[key];
     }
@@ -70,7 +80,7 @@ class OnyxCache {
      * @param {string} key
      * @returns {boolean}
      */
-    hasCacheForKey(key) {
+    hasCacheForKey(key: string) {
         return isDefined(this.storageMap[key]);
     }
 
@@ -79,7 +89,7 @@ class OnyxCache {
      * Serves to keep the result of `getAllKeys` up to date
      * @param {string} key
      */
-    addKey(key) {
+    addKey(key: string) {
         this.storageKeys.add(key);
     }
 
@@ -90,7 +100,7 @@ class OnyxCache {
      * @param {*} value
      * @returns {*} value - returns the cache value
      */
-    set(key, value) {
+    set(key:string, value: unknown) {
         this.addKey(key);
         this.addToAccessedKeys(key);
         this.storageMap[key] = value;
@@ -102,7 +112,7 @@ class OnyxCache {
      * Forget the cached value for the given key
      * @param {string} key
      */
-    drop(key) {
+    drop(key: string) {
         delete this.storageMap[key];
         this.storageKeys.delete(key);
         this.recentKeys.delete(key);
@@ -112,7 +122,7 @@ class OnyxCache {
      * Deep merge data to cache, any non existing keys will be created
      * @param {Record<string, *>} data - a map of (cache) key - values
      */
-    merge(data) {
+    merge(data: Record<string, unknown>) {
         if (!_.isObject(data) || _.isArray(data)) {
             throw new Error('data passed to cache.merge() must be an Object of onyx key/value pairs');
         }
@@ -132,7 +142,7 @@ class OnyxCache {
      * @param {string} taskName - unique name given for the task
      * @returns {*}
      */
-    hasPendingTask(taskName) {
+    hasPendingTask(taskName: string) {
         return isDefined(this.pendingPromises[taskName]);
     }
 
@@ -144,7 +154,7 @@ class OnyxCache {
      * @param {string} taskName - unique name given for the task
      * @returns {Promise<T>}
      */
-    getTaskPromise(taskName) {
+    getTaskPromise(taskName: string) {
         return this.pendingPromises[taskName];
     }
 
@@ -156,7 +166,7 @@ class OnyxCache {
      * @param {Promise<T>} promise
      * @returns {Promise<T>}
      */
-    captureTask(taskName, promise) {
+    captureTask(taskName: string, promise: Promise<unknown>) {
         this.pendingPromises[taskName] = promise.finally(() => {
             delete this.pendingPromises[taskName];
         });
@@ -169,7 +179,7 @@ class OnyxCache {
      * Adds a key to the top of the recently accessed keys
      * @param {string} key
      */
-    addToAccessedKeys(key) {
+    addToAccessedKeys(key: string) {
         // Removing and re-adding a key ensures it's at the end of the list
         this.recentKeys.delete(key);
         this.recentKeys.add(key);
@@ -195,7 +205,7 @@ class OnyxCache {
      * Set the recent keys list size
      * @param {number} limit
      */
-    setRecentKeysLimit(limit) {
+    setRecentKeysLimit(limit: number) {
         this.maxRecentKeysSize = limit;
     }
 
@@ -204,7 +214,7 @@ class OnyxCache {
      * @param {*} value
      * @returns {Boolean}
      */
-    hasValueChanged(key, value) {
+    hasValueChanged(key: string, value: unknown) {
         return !deepEqual(this.storageMap[key], value);
     }
 }

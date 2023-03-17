@@ -12,7 +12,7 @@ const provider = {
      * @param {String} key
      * @return {Promise<*>}
      */
-    getItem(key) {
+    getItem(key: string) {
         return AsyncStorage.getItem(key)
             .then((value) => {
                 const parsed = value && JSON.parse(value);
@@ -25,7 +25,7 @@ const provider = {
      * @param {String[]} keys
      * @return {Promise<Array<[key, value]>>}
      */
-    multiGet(keys) {
+    multiGet(keys: string[]) {
         return AsyncStorage.multiGet(keys)
             .then(pairs => _.map(pairs, ([key, value]) => [key, value && JSON.parse(value)]));
     },
@@ -36,7 +36,7 @@ const provider = {
      * @param {*} value
      * @return {Promise<void>}
      */
-    setItem(key, value) {
+    setItem(key: string, value: unknown) {
         return AsyncStorage.setItem(key, JSON.stringify(value));
     },
 
@@ -45,8 +45,8 @@ const provider = {
      * @param {Array<[key, value]>} pairs
      * @return {Promise<void>}
      */
-    multiSet(pairs) {
-        const stringPairs = _.map(pairs, ([key, value]) => [key, JSON.stringify(value)]);
+    multiSet(pairs: [string, unknown][]) {
+        const stringPairs = _.map(pairs, ([key, value]) => [key, JSON.stringify(value)] as [string, string]);
         return AsyncStorage.multiSet(stringPairs);
     },
 
@@ -55,8 +55,8 @@ const provider = {
      * @param {Array<[key, value]>} pairs
      * @return {Promise<void>}
      */
-    multiMerge(pairs) {
-        const stringPairs = _.map(pairs, ([key, value]) => [key, JSON.stringify(value)]);
+    multiMerge(pairs: [string, unknown][]) {
+        const stringPairs = _.map(pairs, ([key, value]) => [key, JSON.stringify(value)] as [string, string]);
         return AsyncStorage.multiMerge(stringPairs);
     },
 
